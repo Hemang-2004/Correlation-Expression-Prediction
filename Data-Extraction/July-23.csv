@@ -1,10 +1,11 @@
 "Sampling
-Month",Name Of Monitoring Location,Use Based Class,Dissolved O2 (mg/L),pH,Conductivity (&micro;mho/cm),"BOD
-(mg/L)",NitrateN (mg/L),"Fecal Coliform
-(MPN/100ml)","Total Coliform
-(MPN/100ml)",Carbonate (CO3-) (mg/L),"Bicarbonate (HCO3-)
-(mg/L)",Turbidity (mg/L),Phenolphthalein Alkalinity (mg/L),"Total Alkalinity (mg/L)",Chlorides (mg/L),"COD (mg/L)",Ammonical-N (mg/L),Total Hardness (mg/L),Ca as CaCo3 (mg/L),Mg as CaCo3 (mg/L),Sulphate (mg/L),Sodium (mg/L),"Total Dissolved Solids
-(mg/L)",Phosphate (mg/L),Iron (mg/L),Potassium (mg/L),Fluoride (mg/L),Year
+Month",Name Of Monitoring Location,Use Based Class,Dissolved O2 (mg/L),pH,"Conductivi
+ty (&micro; mho/cm)","BOD
+(mg/L)",NitrateN (mg/L),"Fecal Coliform (MPN/100ml)",Total Coliform (MPN/100ml),"Carbonate (CO3-
+) (mg/L)","Bicarbonate (HCO3-)
+(mg/L)",Turbidity (mg/L),"Phenolphthalein Alkalinity (mg/L)",Total Alkalinity (mg/L),Chlorides (mg/L),"COD
+(mg/L)",Ammonical-N (mg/L),"Total Hardness (mg/L)",Ca as CaCo3 (mg/L),Mg as CaCo3 (mg/L),Sulphate (mg/L),Sodium (mg/L),"Total
+Dissolved Solids (mg/L)",Phosphate (mg/L),Iron (mg/L),Potassium (mg/L),Fluoride (mg/L),Year
 Jul,DEVASANDRA LAKE,"D (Propagation of wild life,fisheries)",4.4,8.2,392,7.0,1,6300,54000,3(BDL),80,35.6,5(BDL),80,64,88,0.48,72,44,28,15,73,268,0.56,0.5(BDL),13,0.23,2023
 Jul,HEBBAL LAKE,"D (Propagation of wild life,fisheries)",4.7,7.2,550,8.0,2,2300,54000,3(BDL),124,6.4,5(BDL),124,108,72,0.79,148,80,68,11,60,376,0.98,0.5(BDL),27,0.28,2023
 Jul,JAKKUR LAKE,"E (Irrigation, industrial cooling and controlled waste)",2.6,7.0,908,12.0,4.1,4000,92000,3(BDL),224,25.3,5(BDL),224,156,119,1.8,280,144,136,20,125,620,2.4,0.5(BDL),32,0.45,2023

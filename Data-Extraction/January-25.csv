@@ -1,18 +1,12 @@
 "Sl.
 No.","STN
 Code",Sampling Month,Name Of Monitoring Location,Use Based Class,Temperature ( oC),Dissolved O2 (mg/L),pH,Conductivity (&micro;mho/ cm),"BOD
-(mg/L)",NitrateN (mg/L),NitriteN (mg/L),"Fecal Coliform
-(MPN/10
-0ml)","Total Coliform
-(MPN/10
-0ml)","Fecal Streptococci (MPN/10
+(mg/L)",NitrateN (mg/L),NitriteN (mg/L),"Fecal Coliform (MPN/100ml)","Total Coliform (MPN/100ml)","Fecal Streptococci (MPN/10
 0ml)","Carbonate (CO3-)
 (mg/L)","Bicarbonate (HCO3-)
 (mg/L)",Turbidity (NTU),Phenolphthalein Alkalinity (mg/L),Total Alkalinity (mg/L),Chlorides (mg/L),"COD
 (mg/L)",Total Kjeldahl Nitrogen (mg/L),"Ammonical
--N (mg/L)",Total Hardness (mg/L),"Ca as CaCO3
-(mg/L)",Ca (mg/L),"Mg as CaCO3
-(mg/L)",Mg (mg/L),Sulphate (mg/L),Sodium (mg/L),Total Dissolved Solids (mg/L),Total Suspended Solids (mg/L),Phosphate (mg/L),Boron (mg/L),Potassium (mg/L),Fluoride (mg/L),"Sodium Percentage
+-N (mg/L)",Total Hardness (mg/L),"Ca as CaCo3 (mg/L)",Ca (mg/L),"Mg as CaCo3 (mg/L)",Mg (mg/L),Sulphate (mg/L),Sodium (mg/L),Total Dissolved Solids (mg/L),Total Suspended Solids (mg/L),Phosphate (mg/L),Boron (mg/L),Potassium (mg/L),Fluoride (mg/L),"Sodium Percentage
 %",SAR,Ortho Phosphate (mg/L),Year
 1,1388,Jan,Ulsoor Lake Training Centre Of Fish Breeding,"D (Propagation of wild life,fisheries)",28.0,7.0,6.7,725,4,2.8,0.02(BDL),1400,11000,-,3(BDL),156,2.2,5(BDL),156,72,39,1.5(BDL),0.4,144,116,46.4,28,6.81,31,68,500,10(BDL),0.2(BDL),0.5(BDL),17,0.2(BDL),47,2.5,0.3,2025
 2,2778,Jan,River Arkavathi At Tippagonda-halli Reservoir,"D (Propagation of wild life,fisheries)",27.4,6.7,7.1,1266,6,5,0.02(BDL),17,220,49,3(BDL),272,3.6,5(BDL),272,172,68,5.2,4.0,284,144,57.6,140,34.03,46,92,860,10(BDL),2.5,0.5(BDL),18,0.23,39,2.4,6,2025

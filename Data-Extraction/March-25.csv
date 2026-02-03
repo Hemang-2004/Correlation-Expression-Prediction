@@ -1,9 +1,7 @@
 "STN
 Code",Sampling Month,Name Of Monitoring Location,Use Based Class,"Temperature
 °C",Dissolved O2 (mg/L),pH,Conductivity (&micro;mho/ cm),"BOD
-(mg/L)",NitrateN (mg/L),NitriteN (mg/L),"Fecal Coliform (MPN/
-100ml)","Total Coliform (MPN/
-100ml)","Fecal Streptococci (MPN/
+(mg/L)",NitrateN (mg/L),NitriteN (mg/L),"Fecal Coliform (MPN/100ml)","Total Coliform (MPN/100ml)","Fecal Streptococci (MPN/
 100ml)","Carbonate (CO3-)
 (mg/L)","Bicarbonate (HCO3-)
 (mg/L)",Turbidity NTU,Phenolphthalein Alkalinity (mg/L),Total Alkalinity (mg/L),Chlorides (mg/L),"COD
