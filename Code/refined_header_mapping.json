@@ -1,0 +1,228 @@
+{
+    "AMMONICALN": [
+        "Ammonical N (mg/L)",
+        "Ammonical-N (mg/L)",
+        "Ammonical\n-N (mg/L)",
+        "Ammonical- N (mg/L)",
+        "Ammonic al-N (mg/L)"
+    ],
+    "BICARBONATE": [
+        "Bicarbonate (HCO3-)\n(mg/L)",
+        "Bicarbonate (HCO3\n)\n(mg/L)",
+        "Bicarbonate (HCO3-) (mg/L)"
+    ],
+    "BOD": [
+        "BOD (mg/L)",
+        "BOD\n(mg/L)"
+    ],
+    "BORON": [
+        "Boron (mg/L)"
+    ],
+    "CA": [
+        "Ca",
+        "Ca (mg/L)"
+    ],
+    "CAASCA": [
+        "Calcium as Ca (mg/L)",
+        "Ca as Ca (mg/L)"
+    ],
+    "CAASCACO3": [
+        "Ca as CaCo3 (mg/L)"
+    ],
+    "CADMIUM": [
+        "Cadmium (mg/L)"
+    ],
+    "CARBONATE": [
+        "Carbonate (CO3-)\n(mg/L)",
+        "Carbonate (CO3-)(mg/L)",
+        "Carbonate (CO3-) (mg/L)"
+    ],
+    "CARBONATECO3": [
+        "Carbonate (CO3-\n) (mg/L)"
+    ],
+    "CHLORIDES": [
+        "Chlorides (mg/L)"
+    ],
+    "CHROMIUMTOTAL": [
+        "Chromium Total (mg/L)"
+    ],
+    "COD": [
+        "COD (mg/L)",
+        "COD\n(mg/L)"
+    ],
+    "CONDUCTIVITY": [
+        "Conductivity (&micro;mh o/cm)",
+        "Conductivity (&micro;mho/cm)",
+        "Conductivity (&micro;mho/ cm)",
+        "Conductivity (micro;mho/cm)",
+        "Conductivity (&micro;mho\n/cm)",
+        "Conductivi\nty (&micro; mho/cm)",
+        "Conductivity (micro;mho/c m)",
+        "Conductivity (&micro;mho/c m)",
+        "Conductivity (&micro; mho/cm)"
+    ],
+    "COPPER": [
+        "Copper (mg/L)"
+    ],
+    "DIVERSITYINDEX": [
+        "Diversity Index"
+    ],
+    "DO": [
+        "Dissolved O2 (mg/L)"
+    ],
+    "FECALSTREPTOCOCCI": [
+        "Fecal Streptococci (MPN/100ml\n)",
+        "Fecal Streptococci (MPN/10\n0ml)",
+        "Fecal Streptococci (MPN/\n100ml)",
+        "Fecal Streptoco cci (MPN/\n100ml)",
+        "Fecal Streptococci (MPN/100ml)"
+    ],
+    "FECAL_COLI": [
+        "Fecal Coliform (MPN/100ml)"
+    ],
+    "FLUORIDE": [
+        "Fluoride (mg/L)"
+    ],
+    "FREEAMMONIAASN": [
+        "Free Ammonia as N"
+    ],
+    "IRON": [
+        "Iron (mg/L)"
+    ],
+    "LEAD": [
+        "Lead (mg/L)",
+        "Lead (mg/L\n)"
+    ],
+    "MANGANESE": [
+        "Manganese (mg/L)"
+    ],
+    "MG": [
+        "Mg",
+        "Mg (mg/L)",
+        "Magnesiu m as Mg (mg/L)",
+        "Magnesium as Mg (mg/L)"
+    ],
+    "MGASCA": [
+        "Mg as Ca (mg/L)"
+    ],
+    "MGASCACO3": [
+        "Mg as CaCo3 (mg/L)"
+    ],
+    "NAMEOFMONITORINGLOCATION": [
+        "Name Of Monitoring Location"
+    ],
+    "NICKEL": [
+        "Nickel (mg/L)"
+    ],
+    "NITRATE_N": [
+        "NitrateN (mg/L)"
+    ],
+    "NITRITEN": [
+        "NitriteN (mg/L)"
+    ],
+    "ORTHOPHOSPHATE": [
+        "Ortho Phosphate\n(mg/L)",
+        "Ortho Phosphate (mg/L)"
+    ],
+    "PH": [
+        "pH"
+    ],
+    "PHENOLPHTHALEINALKALINITY": [
+        "Phenolpthalein Alkalinity",
+        "Phenolphthalein\nAlkalinity (mg/L)",
+        "Phenolphthalein Alkalinity\n(mg/L)",
+        "Phenolphthalein Alkalinity (mg/L)",
+        "Phenol phthale in Alkalinity (mg/L)"
+    ],
+    "PHOSPHATE": [
+        "Phosphate (mg/L)"
+    ],
+    "POTASSIUM": [
+        "Potassium (mg/L)"
+    ],
+    "SAMPLINGMONTH": [
+        "Sampling\nMonth",
+        "Sampling Month"
+    ],
+    "SAPROBITYINDEX": [
+        "Saprobity Index"
+    ],
+    "SAR": [
+        "SAR"
+    ],
+    "SLNO": [
+        "Sl. No",
+        "Sl.No",
+        "Sl.\nNo."
+    ],
+    "SODIUM": [
+        "Sodium (mg/L)"
+    ],
+    "SODIUMPERCENTAGE": [
+        "Sodium Percentage",
+        "Sodium Percentage\n%"
+    ],
+    "STN_CODE": [
+        "STN\nCode",
+        "STN Code"
+    ],
+    "SULPHATE": [
+        "Sulphate (mg/L)"
+    ],
+    "TEMP": [
+        "Temperature\u00b0 C",
+        "Temperature in o C",
+        "Temperature\n\u02daC",
+        "Temperature C0",
+        "Temperature ( oC)",
+        "Temperature\u00b0C",
+        "Temperature\n0C",
+        "Tempe rature",
+        "Temperature\n\u00b0C",
+        "Temperature",
+        "Temperature \u00b0C"
+    ],
+    "TOTALALKALINITY": [
+        "Total Alkalinity (mg/L)"
+    ],
+    "TOTALDISSOLVEDSOLIDS": [
+        "Total Dissolved Solids  (mg/L)",
+        "Total Dissolved Solids\n(mg/L)",
+        "Total Dissolved Solids",
+        "Total Dissolved\nSolids (mg/L)",
+        "Total Dissolved Solids (mg/L)",
+        "Total\nDissolved Solids (mg/L)"
+    ],
+    "TOTALHARDNESS": [
+        "Total Hardness (mg/L)"
+    ],
+    "TOTALKJELDAHLNITROGEN": [
+        "Total Kjeldahl Nitrogen",
+        "Total Kjeldahl Nitrogen (mg/L)",
+        "Total Kjeldahl Nitrogen\n(mg/L)"
+    ],
+    "TOTALSUSPENDEDSOLIDS": [
+        "Total Suspended Solids  (mg/L)",
+        "Total Suspended Solids (mg/L)",
+        "Total Suspended Solids\n(mg/L)"
+    ],
+    "TOTAL_COLI": [
+        "Total Coliform (MPN/100ml)"
+    ],
+    "USEBASEDCLASS": [
+        "Use Based Class"
+    ],
+    "YEAR": [
+        "Year"
+    ],
+    "ZINC": [
+        "Zinc (mg/L)"
+    ],
+    "TURBIDITY_NTU": [
+        "Turbidity NTU",
+        "Turbidity (NTU)"
+    ],
+    "TURBIDITY_MGL": [
+        "Turbidity (mg/L)"
+    ]
+}
