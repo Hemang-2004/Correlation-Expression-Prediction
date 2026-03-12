@@ -1,39 +1,59 @@
-# Bangalore Lakes Water Quality: ML & Spatial Analysis Pipeline
+# 🌊 Bangalore Lakes Water Quality — ML Pipeline Analysis
 
-This repository contains a robust Machine Learning and Spatial Analysis pipeline aimed at understanding, predicting, and monitoring the water quality of lakes in Bangalore, India. It brings together physical ground-truth water quality data and Sentinel-2 satellite imagery to create an end-to-end analytical framework.
+This directory contains the complete Machine Learning and Deep Learning pipeline for analyzing, modeling, and predicting water quality metrics across various lakes in Bangalore based on the core environmental criteria.
 
-## 1. Why we chose these factors in the ML Pipeline
-In the ML pipeline (`ml_pipeline.ipynb`), we targeted predicting five core factors: **DO (Dissolved Oxygen), BOD (Biochemical Oxygen Demand), PH, COD (Chemical Oxygen Demand), and NITRATE_N**. 
-* **DO & BOD:** The fundamental indicators of a aquatic ecosystem's health. High BOD and low DO indicate severe organic pollution and lack of oxygen for aquatic life.
-* **COD:** Measures all chemical oxidation, capturing both biodegradable and non-biodegradable industrial/chemical pollutants.
-* **NITRATE_N:** A direct indicator of agricultural runoff and sewage (eutrophication drivers).
-* **PH:** Determines the acidity/alkalinity, affecting chemical solubility and biological availability of nutrients.
+## 📊 Dataset & Targets
 
-We used spatial features (`Lattitude`, `Longitude`), temporal features (`MONTH_YEAR` encoded), and intrinsic physical characteristics (`MIN_TEMP`, `MAX_TEMP`, `WIND_SPEED`, `PRECIPITATION`) as predictors. Weather influences evaporation, dilution, and microbial activity, while spatial features encode geographic clustering of pollution sources (e.g., industrial zones vs. residential).
+- **Data Source**: `master_dataset.csv` (monitoring data collected from July 2023 to November 2025).
+- **Split Strategy**: A robust **80-20 Train/Test Split** to maintain an isolated test set for model evaluation.
+- **Target Variables Evaluated (Numerical Mathematical Factors Only)**:  
+  `DO`, `BOD`, `CARBONATE`, `BICARBONATE`, `TOTALALKALINITY` *(chosen as the best integrated alkalinity factor)*, `TOTALHARDNESS`, `TOTALDISSOLVEDSOLIDS`, `TOTALSUSPENDEDSOLIDS`.  
+  *(Note: Non-numerical identifiers like `STN CODE`, `MONTH/YEAR`, `NAME`, and `USEBASED CLASS` have been strictly excluded from the prediction target list).*
 
-## 2. Why these factors in the GEE Script
-The Google Earth Engine script (`bangalore_lakes_gee.js`) extracts Sentinel-2 satellite data. Since we cannot directly "see" chemical BOD or DO from space, we extract optical proxies that strongly correlate with biochemical realities:
-* **NDWI & MNDWI (Water Indices):** Used to map the actual surface water extent, separating water from urban infrastructure and vegetation.
-* **Turbidity Proxy (Red/Green Ratio):** Murky water scatters more red light. High turbidity correlates positively with high COD and suspended solids (TSS).
-* **Chlorophyll-a Proxy (Red-Edge/Red Ratio):** Measures algal blooms. High Chl-a is a direct result of high Nitrates/Phosphates (eutrophication) and leads to crashing DO levels at night.
-* **FAI (Floating Algae Index):** Specifically sensitive to severe surface algal scum, a common issue in heavily polluted Bangalore lakes (like Bellandur).
-* **NDVI/NDSI:** Track vegetation encroachment (weeds/hyacinth) and sedimentation.
+## ⚙️ Data Preprocessing & Feature Engineering
 
-## 3. What we can predict using all of this
-By merging the ML pipeline and GEE outputs, we establish a **Proxy-to-Parameter bridge**. 
-* **Spatial-Temporal Forecasting:** The current ML models can predict *future* BOD, COD, and DO values for a specific lake based on upcoming weather forecasts and historical trends.
-* **Satellite-to-Ground Inference:** By training an ML model using the ground-truth table alongside the GEE proxy data (Chl-a, Turbidity), we can predict accurate DO, BOD, and Nitrate levels for lakes that *don't* have physical monitoring stations, simply by looking at their satellite image.
-* **Anomaly Detection:** Quickly identifying illegal industrial dumping or sudden algal blooms by spotting unexpected spikes in Turbidity or FAI from the satellite data before physical water testing is completed.
+1. **Cleaning & Outlier Removal**: Missing values across all 32 numerical columns were handled via `SimpleImputer`. An IQR (Interquartile Range) capping strategy was then applied to prevent extreme outliers from heavily biasing the model coefficients.
+2. **Temporal Transformations**: To accurately interpret continuous sequential variations, we generated temporal attributes including `MONTH`, `YEAR_NUM`, cyclical embeddings (`MONTH_SIN`, `MONTH_COS`), and a continuous `TIME_INDEX`.
+3. **Scaling Strategy**: `StandardScaler` was fit strictly on the training set to prevent accidental data leakage, providing identically scaled numerical signals to models downstream.
 
-## 4. Understanding the current Accuracy (~0.83 R²)
-The current models achieve high R² scores (up around 0.80 - 0.85) for predicting these chemical parameters.
-* **Why it's good:** Predicting chaotic biochemical systems with ~83% variance explanation using only weather, time, and location is exceptionally strong. It proves that pollution in Bangalore lakes follows highly structured spatial and seasonal patterns (e.g., monsoon dilution vs. summer concentration).
-* **Why it caps out here:** The remaining ~17% variance is due to "unseen" localized events—illegal sudden dumping of industrial effluent, temporary STP (Sewage Treatment Plant) failures, or highly localized heavy rainfall. These micro-events cannot be predicted strictly by geographic coordinates, monthly averages, or macro-weather data.
+## 🤖 Classical Machine Learning & Pipeline Optimization
 
-## 5. How we can improve the Pipeline
-To push the accuracy into the 0.90+ range and make the system truly real-time:
+In total, **12 Classical ML Models** (ranging from simple Linear Regression and Ridge to robust tree-based regressors like RandomForest and ExtraTrees) were separately trained for all 8 water quality attributes.
 
-1. **Integrate the Datasets (The Ultimate Goal):** The immediate next step is to physically merge the GEE exported CSVs (containing optical proxies like Turbidity/Chl-a) into the ML `master_dataset.csv`. Feeding the satellites' optical view of the lake on a specific month into the ML model as features (e.g., predicting `BOD` using `MAX_TEMP` + `GEE_Turbidity` + `GEE_FAI`) will massively bridge the gap between "unseen" pollution events and the model.
-2. **Lag Features & Time-Series:** The current neural networks treat rows mostly independently. Implementing robust recursive LSTM models that look at the a rolling window of the past 3 months to predict the next month.
-3. **Advanced Ensemble & Deep Learning Architecture:** We've introduced a baseline Stacking Ensemble. We can expand this by using a hybrid architecture: processing the raw tabular data with LightGBM/XGBoost, passing it through a dense layer, and concatenating it with an LSTM processing the local weather/satellite time-series.
-4. **Finer Temporal Resolution:** Aggregating data purely by month smooths out extreme spikes. If weekly testing data and bi-weekly Sentinel-2 (clear sky) data can be matched, short-term extreme pollution events can be modeled.
+- **Hyperparameter Tuning Strategy**: After reviewing the default 80-20 split performance of each algorithm, `GridSearchCV` was strictly deployed on the top-performing classical models to fine-tune their learning configurations.
+
+### 🧠 Deep Learning Execution (CNN, LSTM, FNN)
+We further evaluated the impact of non-linear functional mapping through Neural Networks by constructing three tailored architectures using Keras/TensorFlow:
+- **Feed-Forward Neural Network (FNN)**: Achieved >0.96 R² on specific markers (like Total Hardness) with roughly ~52k parameters.
+- **1D Convolutional Neural Network (1D-CNN)**: ~51k parameters designed to pick up on continuous local fluctuations across all variables.
+- **Long Short-Term Memory (LSTM)**: ~122k parameter network optimized to contextualize temporal signals prior to projection.
+
+*Evaluation Note: While the DL suite generated strong validation trajectories and tracked correlations properly, **the Tree-based Ensembles (ExtraTrees, RandomForest, and GradientBoosting) frequently surpassed Neural methodologies on tabular benchmarks** specific to this dataset matrix.*
+
+## 🏆 Final Model Accuracies & Evaluation
+
+Below are the final compiled evaluation metrics (R² & RMSE on the testing sets) for the undisputed champion model corresponding to each individual attribute.
+
+| Target Factor | Champion Model | R² Score | RMSE |
+|--------------|----------------|----------|------|
+| **DO** | RandomForest (Tuned) | **0.8673** | 0.72 |
+| **BOD** | GradientBoosting | **0.9291** | 3.75 |
+| **CARBONATE** | ExtraTrees | **0.9819** | 2.89 |
+| **BICARBONATE** | RandomForest | **0.8342** | 51.39 |
+| **TOTALALKALINITY** | ExtraTrees | **0.8427** | 51.65 |
+| **TOTALHARDNESS** | GradientBoosting (Tuned) | **0.9940** | 10.09 |
+| **TOTALDISSOLVEDSOLIDS** | ExtraTrees | **0.9949** | 25.48 |
+| **TOTALSUSPENDEDSOLIDS** | LightGBM | **0.4876** | 39.30 |
+
+## 🔮 Future Forecasting Trends (April – August 2026)
+
+Using the highest-performing configurations established during testing, we extrapolated the target vectors 5 months further into the future (Months: April, May, June, July, and August 2026). Our pipeline programmatically generated the target feature blocks mapping to these time horizons, generating dynamic predictive traces:
+
+- ➡️ **Stable/Flattened Indicators**: `DO` (~4.80 mg/L), `BOD` (~7.51 mg/L), `BICARBONATE` (~161-162 mg/L), `TOTALALKALINITY` (~167 mg/L), `TOTALHARDNESS` (~164 mg/L), and `TOTALDISSOLVEDSOLIDS` (~503 mg/L).
+- 📈 **Escalating Indicators**: The regression suite detects an increasing trajectory for `CARBONATE` (predictive rise from 16 to 22.75 mg/L by August) and `TOTALSUSPENDEDSOLIDS` (simulated jump from 9.69 to ~22.70 mg/L).
+
+*These extrapolations are permanently stored inside the newly generated `forecast_apr_aug_2026.csv` artifact.*
+
+## 🖼️ Programmatic Artifact Control (Images)
+
+In accordance with architectural standards, **all graphical visualizations**, ranging from multi-axis model metric heatmaps, bar chart forecasts, actual vs. predicted distributions, spatial distribution charts, and CNN/LSTM/FNN epochs histories **have been systematically compiled to the inner `/images` directory**. No loose `.png` images populate the root folder context.
