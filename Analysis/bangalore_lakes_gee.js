@@ -1,31 +1,14 @@
-/**
- * ============================================================================
- *  BANGALORE LAKES — Water Quality Data Export Script (FIXED)
- *  Google Earth Engine (GEE) JavaScript
- *
- *  HOW TO USE:
- *    1. Paste this entire script into https://code.earthengine.google.com/
- *    2. Click RUN
- *    3. In the Tasks tab (top-right), click RUN next to each export task
- *    4. Files appear in your Google Drive → folder "GEE_BangaloreLakes"
- *
- *  EXPORTS (one combined CSV + one per lake):
- *    NDWI, MNDWI, NDVI, NDSI, Turbidity, ChlA, FAI, B2/B3/B4/B8/B11
- * ============================================================================
- */
 
-// ============================================================================
-//  CONFIGURATION
-// ============================================================================
 
 var STUDY_START = '2023-07-01';
 var STUDY_END = '2025-11-30';
-var CLOUD_MAX = 40;
-var BUFFER_M = 150;
-var DRIVE_FOLDER = 'GEE_BangaloreLakes';
+var N_MONTHS = 29;            // Jul 2023 → Nov 2025
+var CLOUD_MAX = 30;            // % cloud cover filter (tighter than before)
+var BUFFER_M = 150;           // buffer radius around lake centroid (metres)
+var DRIVE_FOLDER = 'GEE_BangaloreLakes_WQ';
 
 // ============================================================================
-//  LAKE COORDINATES  (80 lakes from the monitoring dataset)
+//  LAKE COORDINATES  (80 monitoring stations)
 // ============================================================================
 
 var LAKES = [
@@ -111,169 +94,487 @@ var LAKES = [
     { name: 'Sankey Tank', lon: 77.5750, lat: 13.0069 }
 ];
 
-print('Total lakes: ' + LAKES.length);
+print('Total lakes loaded: ' + LAKES.length);
 
 // ============================================================================
-//  SENTINEL-2 COLLECTION
+//  SENTINEL-2 COLLECTION — Cloud Masking & Band Scaling
+//  Using SCL (Scene Classification Layer) for pixel-level cloud masking
 // ============================================================================
 
-function maskClouds(image) {
+/**
+ * Mask cloud, cloud shadow, saturated pixels using SCL band.
+ * SCL classes kept: 4=Vegetation, 5=Not vegetated, 6=Water, 7=Unclassified
+ */
+function maskS2Clouds(image) {
     var scl = image.select('SCL');
+    // Keep only clear land (4), bare soil (5), water (6), unclassified (7)
     var mask = scl.gte(4).and(scl.lte(7));
-    return image.updateMask(mask)
-        .divide(10000)
-        .copyProperties(image, ['system:time_start']);
+    return image
+        .updateMask(mask)
+        .divide(10000)                       // scale to [0, 1] reflectance
+        .copyProperties(image, ['system:time_start', 'CLOUDY_PIXEL_PERCENTAGE']);
 }
 
-function addIndices(image) {
-    var ndwi = image.normalizedDifference(['B3', 'B8']).rename('NDWI');
-    var mndwi = image.normalizedDifference(['B3', 'B11']).rename('MNDWI');
-    var ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI');
-    var ndsi = image.normalizedDifference(['B3', 'B8A']).rename('NDSI');
-    var turbidity = image.select('B4').divide(image.select('B3')).rename('Turbidity');
-    var chla = image.select('B5').divide(image.select('B4')).rename('ChlA');
-    var fai = image.expression(
-        'NIR - (RED + (SWIR - RED) * 0.2105)',
-        { NIR: image.select('B8'), RED: image.select('B4'), SWIR: image.select('B11') }
+// ============================================================================
+//  SCIENTIFIC SPECTRAL INDEX COMPUTATION
+//  All indices computed from surface reflectance bands
+//
+//  Band reference (Sentinel-2):
+//    B2  = Blue      (~490 nm)
+//    B3  = Green     (~560 nm)
+//    B4  = Red       (~665 nm)
+//    B5  = Red-Edge1 (~705 nm)   ← key for NDCI, ChlA
+//    B6  = Red-Edge2 (~740 nm)
+//    B7  = Red-Edge3 (~783 nm)
+//    B8  = NIR       (~842 nm)
+//    B8A = Narrow NIR (~865 nm)
+//    B11 = SWIR1     (~1610 nm)
+//    B12 = SWIR2     (~2190 nm)
+// ============================================================================
+
+function computeIndices(image) {
+
+    // ── WATER PRESENCE / EXTENT ──────────────────────────────────────────────
+
+    // NDWI — McFeeters (1996)
+    // Positive values indicate open water surface
+    var NDWI = image.normalizedDifference(['B3', 'B8']).rename('NDWI');
+
+    // MNDWI — Modified NDWI, Xu (2006)
+    // Uses SWIR instead of NIR; better suppresses built-up land noise
+    var MNDWI = image.normalizedDifference(['B3', 'B11']).rename('MNDWI');
+
+    // AWEIsh — Automated Water Extraction Index (shadow-insensitive)
+    // Feyisa et al. (2014) — excellent for urban lake environments like Bangalore
+    var AWEIsh = image.expression(
+        'BLUE + 2.5*GREEN - 1.5*(NIR + SWIR1) - 0.25*SWIR2',
+        {
+            BLUE: image.select('B2'),
+            GREEN: image.select('B3'),
+            NIR: image.select('B8'),
+            SWIR1: image.select('B11'),
+            SWIR2: image.select('B12')
+        }
+    ).rename('AWEIsh');
+
+    // ── TURBIDITY / SUSPENDED SEDIMENT ──────────────────────────────────────
+
+    // NDTI — Normalised Difference Turbidity Index
+    // Lacaux et al. (2007); Red–Green ratio in normalised form
+    // Higher NDTI → higher turbidity / suspended particulates
+    var NDTI = image.normalizedDifference(['B4', 'B3']).rename('NDTI');
+
+    // NDSSI — Normalised Difference Suspended Sediment Index
+    // Hossain et al. (2021); Blue–NIR combination
+    var NDSSI = image.normalizedDifference(['B2', 'B8']).rename('NDSSI');
+
+    // Turbidity Ratio — Red / Green
+    // Simple empirical proxy (Gitelson 1993); correlated with NTU in many studies
+    var Turbidity_Ratio = image.select('B4')
+        .divide(image.select('B3'))
+        .rename('Turbidity_Ratio');
+
+    // ── CHLOROPHYLL-a / ALGAE / EUTROPHICATION ───────────────────────────────
+
+    // NDCI — Normalised Difference Chlorophyll Index
+    // Mishra & Mishra (2012) — designed specifically for inland and coastal water
+    // Uses Red-Edge (B5) and Red (B4): best Sentinel-2 ChlA index
+    // Range: -1 to +1; high positive = high ChlA / bloom
+    var NDCI = image.normalizedDifference(['B5', 'B4']).rename('NDCI');
+
+    // ChlA_3Band — Three-band ChlA retrieval proxy
+    // Based on Gitelson et al. (2009): (1/B5 - 1/B6) × B7
+    // Robust in turbid eutrophic lakes
+    var ChlA_3Band = image.expression(
+        '((1.0/RE1) - (1.0/RE2)) * NIR2',
+        {
+            RE1: image.select('B5'),   // Red-Edge 1  ~705 nm
+            RE2: image.select('B6'),   // Red-Edge 2  ~740 nm
+            NIR2: image.select('B7')    // Red-Edge 3  ~783 nm (used as NIR2)
+        }
+    ).rename('ChlA_3Band');
+
+    // FAI — Floating Algae Index
+    // Hu (2009); detects surface algae / cyanobacteria scum
+    // FAI > 0 strongly indicates floating algae / foam (common in Bellandur etc.)
+    var FAI = image.expression(
+        'NIR - (RED + (SWIR - RED) * ((862 - 665) / (1610 - 665)))',
+        {
+            NIR: image.select('B8'),    // 842 nm
+            RED: image.select('B4'),    // 665 nm
+            SWIR: image.select('B11')    // 1610 nm
+        }
     ).rename('FAI');
-    return image.addBands([ndwi, mndwi, ndvi, ndsi, turbidity, chla, fai]);
+
+    // NDGI — Normalised Difference Greenness Index (Green – Red)
+    // Sensitive to phytoplankton biomass in shallow/turbid waters
+    var NDGI = image.normalizedDifference(['B3', 'B4']).rename('NDGI');
+
+    // ── CYANOBACTERIA / HARMFUL ALGAL BLOOM ─────────────────────────────────
+
+    // CI — Cyanobacteria Index (line height at Red-Edge)
+    // Wynne et al. (2008) — specifically targets cyanobacteria spectral signature
+    // Baseline between 665 nm (B4) and 708 nm (B5); CI = B5 - (B4 + slope)
+    var CI = image.expression(
+        'B5 - (B4 + (B6 - B4) * ((705 - 665) / (740 - 665)))',
+        {
+            B4: image.select('B4'),   // Red      665 nm
+            B5: image.select('B5'),   // RedEdge1 705 nm
+            B6: image.select('B6')    // RedEdge2 740 nm
+        }
+    ).rename('CI');
+
+    // MCI — Maximum Chlorophyll Index
+    // Gower et al. (2005) — fluorescence line height; strong cyanobacteria signal
+    // MCI = B5 - B4 - (B6 - B4) × ((705-665)/(740-665))
+    var MCI = image.expression(
+        'RE1 - RED - (RE2 - RED) * ((705.0 - 665.0) / (740.0 - 665.0))',
+        {
+            RED: image.select('B4'),
+            RE1: image.select('B5'),
+            RE2: image.select('B6')
+        }
+    ).rename('MCI');
+
+    // ── VEGETATION / SHORELINE CONTEXT ──────────────────────────────────────
+
+    // NDVI — Normalised Difference Vegetation Index
+    // Useful as a mask (NDVI > 0.3 = land/vegetation, not water)
+    // Also helps track riparian vegetation health around lakes
+    var NDVI = image.normalizedDifference(['B8', 'B4']).rename('NDVI');
+
+    // ── DISSOLVED ORGANICS / WATER COLOUR ───────────────────────────────────
+
+    // CDOM_Proxy — Green-to-Blue ratio
+    // Correlated with dissolved organic carbon / coloured dissolved organic matter
+    // High values suggest organic-rich / sewage-impacted water (relevant for BLR lakes)
+    var CDOM_Proxy = image.select('B3')
+        .divide(image.select('B2'))
+        .rename('CDOM_Proxy');
+
+    // S2WI — Sentinel-2 Water Index (combines three bands)
+    // Useful for distinguishing water from built-up in urban areas
+    var S2WI = image.expression(
+        '(GREEN - SWIR1) / (GREEN + SWIR1)',
+        {
+            GREEN: image.select('B3'),
+            SWIR1: image.select('B11')
+        }
+    ).rename('S2WI');
+
+    return image.addBands([
+        NDWI, MNDWI, AWEIsh,
+        NDTI, NDSSI, Turbidity_Ratio,
+        NDCI, ChlA_3Band, FAI, NDGI,
+        CI, MCI,
+        NDVI,
+        CDOM_Proxy, S2WI
+    ]);
 }
+
+// ============================================================================
+//  BUILD SENTINEL-2 COLLECTION
+// ============================================================================
 
 var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
     .filterDate(STUDY_START, STUDY_END)
     .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', CLOUD_MAX))
-    .map(maskClouds)
-    .map(addIndices);
+    .map(maskS2Clouds)
+    .map(computeIndices);
+
+print('S2 collection size (pre-monthly aggregation): ', s2.size());
 
 // ============================================================================
-//  MONTH LIST  (29 months: Jul 2023 → Nov 2025)
+//  OUTPUT BANDS (only scientific indices — no raw bands)
 // ============================================================================
 
-var N_MONTHS = 29;
+var INDEX_BANDS = [
+    // Water presence
+    'NDWI', 'MNDWI', 'AWEIsh',
+    // Turbidity / sediment
+    'NDTI', 'NDSSI', 'Turbidity_Ratio',
+    // Chlorophyll-a / algae
+    'NDCI', 'ChlA_3Band', 'FAI', 'NDGI',
+    // Cyanobacteria / bloom
+    'CI', 'MCI',
+    // Vegetation context
+    'NDVI',
+    // Dissolved organics / colour
+    'CDOM_Proxy', 'S2WI'
+];
+
+// Month offsets: 0 = Jul 2023, 28 = Nov 2025
 var monthOffsets = ee.List.sequence(0, N_MONTHS - 1);
 
-// Output bands to extract
-var BANDS = ['B2', 'B3', 'B4', 'B8', 'B11',
-    'NDWI', 'MNDWI', 'NDVI', 'NDSI', 'Turbidity', 'ChlA', 'FAI'];
-
 // ============================================================================
-//  EXPORT 1: ALL LAKES COMBINED — single CSV
-//  Pattern: for each lake, build a time series; merge all into one FC
+//  PER-LAKE TIME SERIES BUILDER
+//  For each lake: iterate over 29 months, extract mean of each index
 // ============================================================================
 
-// Build one FeatureCollection per lake, then merge all of them together.
-// This avoids the "collection-in-algorithm" error by keeping everything
-// as flat Feature objects from the start.
+var allLakeFCs = LAKES.map(function (lake) {
 
-var allLakeFCs = LAKES.map(function (l) {
-    var lakeGeom = ee.Geometry.Point([l.lon, l.lat]).buffer(BUFFER_M);
+    var lakeGeom = ee.Geometry.Point([lake.lon, lake.lat]).buffer(BUFFER_M);
 
-    var lakeSeries = ee.FeatureCollection(monthOffsets.map(function (offset) {
-        var off = ee.Number(offset);
-        var start = ee.Date('2023-07-01').advance(off, 'month');
-        var end = start.advance(1, 'month');
-        var label = start.format('MM/yyyy');
+    var lakeSeries = ee.FeatureCollection(
+        monthOffsets.map(function (offset) {
 
-        var scenes = s2.filterDate(start, end);
-        var nScenes = scenes.size();
-        var composite = scenes.median();
+            var off = ee.Number(offset);
+            var start = ee.Date('2023-07-01').advance(off, 'month');
+            var end = start.advance(1, 'month');
+            var label = start.format('MM/yyyy');   // e.g. "07/2023"
 
-        var vals = composite.select(BANDS).reduceRegion({
-            reducer: ee.Reducer.mean(),
-            geometry: lakeGeom,
-            scale: 20,
-            maxPixels: 1e7,
-            bestEffort: true
-        });
+            // Monthly median composite (more robust than mean for cloud gaps)
+            var monthly = s2.filterDate(start, end);
+            var nScenes = monthly.size();
+            var composite = monthly.median();
 
-        return ee.Feature(null, vals)
-            .set('lake_name', l.name)
-            .set('lon', l.lon)
-            .set('lat', l.lat)
-            .set('month_year', label)
-            .set('year', start.get('year'))
-            .set('month', start.get('month'))
-            .set('num_scenes', nScenes);
-    }));
+            // Reduce all index bands to mean within lake buffer
+            var vals = composite.select(INDEX_BANDS).reduceRegion({
+                reducer: ee.Reducer.mean(),
+                geometry: lakeGeom,
+                scale: 20,          // Sentinel-2 native 20 m for most bands
+                maxPixels: 1e8,
+                bestEffort: true
+            });
+
+            // Also extract standard deviation of NDTI and NDCI as variability proxies
+            var vals_sd = composite.select(['NDTI', 'NDCI', 'NDWI']).reduceRegion({
+                reducer: ee.Reducer.stdDev(),
+                geometry: lakeGeom,
+                scale: 20,
+                maxPixels: 1e8,
+                bestEffort: true
+            });
+
+            return ee.Feature(null, vals)
+                .set(vals_sd)
+                .set('lake_name', lake.name)
+                .set('lon', lake.lon)
+                .set('lat', lake.lat)
+                .set('month_year', label)
+                .set('year', start.get('year'))
+                .set('month', start.get('month'))
+                .set('num_scenes', nScenes);
+        })
+    );
 
     return lakeSeries;
 });
 
-// Merge all per-lake FCs into one flat FeatureCollection
-// Start with the first FC then iterate merge — avoids nesting issues
+// ============================================================================
+//  MERGE ALL PER-LAKE FCs INTO ONE FLAT FEATURE COLLECTION
+// ============================================================================
+
+// JavaScript-side fold/reduce (not GEE server-side) to avoid nesting errors
 var combinedFC = allLakeFCs.reduce(function (acc, fc) {
     return acc.merge(fc);
 });
 
 // ============================================================================
-//  EXPORT — COMBINED CSV
+//  EXPORT — COMBINED CSV (all 80 lakes, all 29 months)
 // ============================================================================
+
+// Column order in output CSV
+var EXPORT_COLS = [
+    'lake_name', 'lon', 'lat', 'month_year', 'year', 'month', 'num_scenes',
+    // Water presence / extent
+    'NDWI', 'MNDWI', 'AWEIsh',
+    // Turbidity / sediment
+    'NDTI', 'NDTI_stdDev', 'NDSSI', 'Turbidity_Ratio',
+    // Chlorophyll-a / algae / eutrophication
+    'NDCI', 'NDCI_stdDev', 'ChlA_3Band', 'FAI', 'NDGI',
+    // Cyanobacteria / bloom
+    'CI', 'MCI',
+    // Vegetation / shoreline
+    'NDVI',
+    // Dissolved organics / water colour
+    'CDOM_Proxy', 'S2WI',
+    // Water presence variability
+    'NDWI_stdDev'
+];
 
 Export.table.toDrive({
     collection: combinedFC,
-    description: 'Bangalore_Lakes_ALL_WaterQuality',
+    description: 'Bangalore_Lakes_ALL_WaterQuality_Indices',
     folder: DRIVE_FOLDER,
-    fileNamePrefix: 'bangalore_lakes_all_water_quality',
+    fileNamePrefix: 'bangalore_lakes_all_wq_indices',
     fileFormat: 'CSV',
-    selectors: [
-        'lake_name', 'lon', 'lat', 'month_year', 'year', 'month', 'num_scenes',
-        'NDWI', 'MNDWI', 'NDVI', 'NDSI', 'Turbidity', 'ChlA', 'FAI',
-        'B2', 'B3', 'B4', 'B8', 'B11'
-    ]
+    selectors: EXPORT_COLS
 });
 
-print('✅ Task queued: Combined CSV (' + LAKES.length + ' lakes × ' + N_MONTHS + ' months)');
+print('✅ Combined CSV task queued: ' + LAKES.length + ' lakes × ' + N_MONTHS + ' months');
 
 // ============================================================================
-//  EXPORT — PER-LAKE CSVs  (one task per lake)
+//  EXPORT — PER-LAKE CSVs (one task per lake, 80 tasks total)
 // ============================================================================
 
 allLakeFCs.forEach(function (lakeFC, i) {
-    var safeName = LAKES[i].name.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+    var safeName = LAKES[i].name
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+
     Export.table.toDrive({
         collection: lakeFC,
-        description: 'BLR_' + safeName,
+        description: 'BLR_WQ_' + safeName,
         folder: DRIVE_FOLDER,
-        fileNamePrefix: 'lake_' + safeName,
+        fileNamePrefix: 'wq_' + safeName,
         fileFormat: 'CSV',
-        selectors: [
-            'lake_name', 'lon', 'lat', 'month_year', 'year', 'month', 'num_scenes',
-            'NDWI', 'MNDWI', 'NDVI', 'NDSI', 'Turbidity', 'ChlA', 'FAI',
-            'B2', 'B3', 'B4', 'B8', 'B11'
-        ]
+        selectors: EXPORT_COLS
     });
 });
 
 print('✅ ' + LAKES.length + ' per-lake export tasks queued');
-print('');
-print('══════════════════════════════════════════');
-print('  GO TO THE TASKS TAB → CLICK RUN ON EACH');
-print('  Output folder: Google Drive → ' + DRIVE_FOLDER);
-print('  Combined file: bangalore_lakes_all_water_quality.csv');
-print('  + ' + LAKES.length + ' individual lake CSVs');
-print('══════════════════════════════════════════');
 
 // ============================================================================
-//  SIMPLE MAP DISPLAY  (just lake points, no complex layer logic)
+//  MAP VISUALISATION — CLIPPED TO 80 MONITORING LAKE BUFFERS ONLY
+//  Each layer is clipped to the merged geometry of all 80 lake buffers,
+//  so index colours appear ONLY at the monitoring stations, not city-wide.
 // ============================================================================
 
 Map.setCenter(77.62, 12.97, 11);
 Map.setOptions('HYBRID');
 
+// ── Step 1: Build a FeatureCollection of all 80 lake buffer polygons ─────────
+//    These are the same 150 m circles used for data extraction above.
+var lakeBuffers = ee.FeatureCollection(LAKES.map(function (l) {
+    return ee.Feature(
+        ee.Geometry.Point([l.lon, l.lat]).buffer(BUFFER_M),
+        { name: l.name }
+    );
+}));
+
+// Merge all 80 buffer polygons into one combined geometry for clipping
+var allBuffersGeom = lakeBuffers.geometry();
+
+// ── Step 2: Build latest composite clipped to lake buffers only ───────────────
+//    .clip() ensures the raster is masked everywhere EXCEPT the 80 lake circles.
+var latestComposite = s2
+    .filterDate('2025-09-01', '2025-11-30')
+    .median()
+    .clip(allBuffersGeom);   // ← THE KEY LINE: restricts render to lake areas only
+
+// ── Step 3: Add index layers — all sourced from the clipped composite ─────────
+
+// NDCI — Chlorophyll-a proxy  (default ON — most useful for water quality)
+Map.addLayer(
+    latestComposite.select('NDCI'),
+    {
+        min: -0.2, max: 0.4,
+        palette: ['#0d0887', '#6a00a8', '#b12a90', '#e16462', '#fca636', '#f0f921']
+    },
+    '🟡 NDCI — ChlA Proxy (Sep–Nov 2025)',
+    true    // visible by default
+);
+
+// MNDWI — Water extent / surface water detection
+Map.addLayer(
+    latestComposite.select('MNDWI'),
+    {
+        min: -0.3, max: 0.6,
+        palette: ['#8B4513', '#FFFF00', '#00BFFF', '#00008B']
+    },
+    '💧 MNDWI — Water Extent (Sep–Nov 2025)',
+    false
+);
+
+// NDTI — Turbidity / suspended sediment
+Map.addLayer(
+    latestComposite.select('NDTI'),
+    {
+        min: -0.2, max: 0.4,
+        palette: ['#ffffcc', '#a1dab4', '#41b6c4', '#2c7fb8', '#253494']
+    },
+    '🟤 NDTI — Turbidity (Sep–Nov 2025)',
+    false
+);
+
+// FAI — Floating algae / foam / cyanobacteria scum
+Map.addLayer(
+    latestComposite.select('FAI'),
+    {
+        min: -0.05, max: 0.05,
+        palette: ['#ffffff', '#addd8e', '#31a354', '#006837']
+    },
+    '🌿 FAI — Floating Algae (Sep–Nov 2025)',
+    false
+);
+
+// AWEIsh — Urban water extraction index
+Map.addLayer(
+    latestComposite.select('AWEIsh'),
+    {
+        min: -0.3, max: 0.5,
+        palette: ['#d73027', '#fee090', '#e0f3f8', '#4575b4']
+    },
+    '🔵 AWEIsh — Water Extraction (Sep–Nov 2025)',
+    false
+);
+
+// CI — Cyanobacteria index
+Map.addLayer(
+    latestComposite.select('CI'),
+    {
+        min: -0.01, max: 0.02,
+        palette: ['#ffffb2', '#fecc5c', '#fd8d3c', '#e31a1c']
+    },
+    '🔴 CI — Cyanobacteria (Sep–Nov 2025)',
+    false
+);
+
+// NDWI — Open water presence
+Map.addLayer(
+    latestComposite.select('NDWI'),
+    {
+        min: -0.3, max: 0.5,
+        palette: ['#d7191c', '#fdae61', '#ffffbf', '#abd9e9', '#2c7bb6']
+    },
+    '🌊 NDWI — Open Water (Sep–Nov 2025)',
+    false
+);
+
+// ── Step 4: Lake buffer outlines — white rings showing the 150 m zones ────────
+Map.addLayer(
+    lakeBuffers.style({
+        color: 'FFFFFF',       // white outline
+        fillColor: '00000000',     // fully transparent fill
+        width: 1.5
+    }),
+    {}, '⬜ Lake Buffer Zones (150 m)'
+);
+
+// ── Step 5: Lake centroid points on top — always visible ──────────────────────
 var lakePoints = ee.FeatureCollection(LAKES.map(function (l) {
     return ee.Feature(ee.Geometry.Point([l.lon, l.lat]), { name: l.name });
 }));
 
 Map.addLayer(
-    lakePoints.style({ color: '00DDFF', pointSize: 6, pointShape: 'circle' }),
-    {}, 'Monitoring Lakes (' + LAKES.length + ')'
+    lakePoints.style({ color: '00E5FF', pointSize: 7, pointShape: 'circle' }),
+    {}, '🔵 Monitoring Lakes (' + LAKES.length + ')'
 );
 
-// Show median RGB of latest available month for context
-var latestComposite = s2.filterDate('2025-10-01', '2025-11-30').median();
-Map.addLayer(
-    latestComposite,
-    { bands: ['B4', 'B3', 'B2'], min: 0, max: 0.25 },
-    'Sentinel-2 RGB (Oct-Nov 2025)',
-    false
-);
+// ============================================================================
+//  CONSOLE SUMMARY
+// ============================================================================
+
+print('');
+print('══════════════════════════════════════════════════════');
+print('  BANGALORE LAKES WATER QUALITY — INDEX EXPORT READY ');
+print('══════════════════════════════════════════════════════');
+print('  Period:      Jul 2023 → Nov 2025 (' + N_MONTHS + ' months)');
+print('  Lakes:       ' + LAKES.length);
+print('  Indices:     NDWI, MNDWI, AWEIsh,');
+print('               NDTI, NDSSI, Turbidity_Ratio,');
+print('               NDCI, ChlA_3Band, FAI, NDGI,');
+print('               CI, MCI, NDVI,');
+print('               CDOM_Proxy, S2WI');
+print('  Resolution:  20 m (Sentinel-2 SR Harmonised)');
+print('  Cloud filter: <' + CLOUD_MAX + '% cloud cover');
+print('  Buffer:      ' + BUFFER_M + ' m radius per lake centroid');
+print('  Output rows: ~' + (LAKES.length * N_MONTHS) + ' (80 lakes × 29 months)');
+print('  Drive folder: ' + DRIVE_FOLDER);
+print('  Combined CSV: bangalore_lakes_all_wq_indices.csv');
+print('  Per-lake:     80 individual CSVs');
+print('');
+print('  ➤ GO TO TASKS TAB → CLICK RUN NEXT TO EACH TASK');
+print('══════════════════════════════════════════════════════');
