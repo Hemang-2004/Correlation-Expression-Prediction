@@ -215,83 +215,79 @@ function computeWQ(img) {
     .clamp(0, 100)
     .rename('WQI_proxy');
 
-  // ── COMPOSITE FEATURES (derived from proxies with positive correlation) ──────
+  // ═══════════════════════════════════════ NAMED COMPOSITE FEATURES
+  // Derived from regression on 362 matched GEE×field rows. Same math as test.py.
   //
-  // From correlation analysis (master_dataset vs GEE proxies, N=362 matched rows):
-  //   Positive with DO (+): TI, SWIR_norm, NDWI, DO_est, TDS_est, TSS_est
-  //   Positive with BOD(+): TI, NDCI, NDCI_pos, FAI, BOD_est, COD_est, TSS_est, WQI
+  // DO composites (r with field DO):
+  //   DO_NDWI_x_DO_est   +0.156  norm(NDWI)×norm(DO_est)×100
+  //   DO_clarity_ratio   +0.132  NDWI / (TI + 0.01)
+  //   DO_NDWI_squared    +0.100  NDWI²
+  //   DO_SWIR_x_NDWI     +0.089  norm(SWIR)×norm(NDWI)×100
+  //   DO_TI_x_SWIR       +0.065  TI × SWIR_norm
   //
-  // Composite bands normalise components to [0,1] before combining so each
-  // contributes equally regardless of absolute scale.
-  //
-  //   DO_clarity_composite  = NDWI_norm × DO_est_norm × TDS_est_norm   × 100
-  //     (three proxies all positive with DO — product amplifies the signal)
-  //
-  //   DO_swir_ndwi_product  = SWIR_norm_n × NDWI_norm                   × 100
-  //     (complementary optical/SWIR proxies both positive with DO)
-  //
-  //   BOD_algal_composite   = NDCI_pos_norm × FAI_abs_norm              × 100
-  //     (two algal proxies both positive with BOD)
-  //
-  //   BOD_turbid_algal      = TI_norm × NDCI_pos_norm                   × 100
-  //     (turbidity × algae — both positive with BOD)
-  //
-  //   BOD_COD_sum           = (BOD_est_norm + COD_est_norm)              × 50
-  //     (sum of both direct organic proxies)
-  //
-  //   Stress_Index          = WQI_norm × BOD_est_norm × (1-DO_est_norm) × 100
-  //     (high BOD/WQI AND low DO = heavily stressed lake)
-  //
-  // ── Component normalisers (min/max anchors from field calibration) ──────────
-  var TI_norm       = TI.subtract(0.20).divide(1.80).clamp(0, 1);   // TI in [0.2, 2.0]
-  var NDCI_pos_n    = NDCI_pos.divide(0.50).clamp(0, 1);            // [0, 0.5]
-  var SWIR_n        = SWIR_norm.clamp(0, 1);                         // already [0,1]
-  var NDWI_n        = NDWI.add(1).divide(2).clamp(0, 1);            // [-1,1] → [0,1]
-  var DO_est_n      = DO_est.divide(8.0).clamp(0, 1);               // [0, 8] → [0,1]
-  var BOD_est_n     = BOD_est.subtract(3.2).divide(446.8).clamp(0, 1);
-  var COD_est_n     = COD_est.subtract(5.2).divide(1482.8).clamp(0, 1);
-  var TDS_est_n     = TDS_est.subtract(10).divide(8680).clamp(0, 1);
-  var WQI_n         = WQI.divide(100).clamp(0, 1);
-  var FAI_abs_n     = FAI.abs().divide(0.10).clamp(0, 1);
+  // BOD/COD composites (r with field BOD / COD):
+  //   BOD_FAI_x_NDCI_sq  +0.127 / +0.204  FAI_pos×NDCI_pos²×1000
+  //   BOD_FAI_x_NDCI     +0.121 / +0.200  FAI_pos×NDCI_pos×100
+  //   BOD_algal_stress   +0.104 / +0.154  NDCI_pos / max(NDWI, 0.01)
+  //   BOD_NDCI_squared   +0.050 / +0.139  NDCI_pos²×100
+  //   BOD_FAI_positive   +0.100 / +0.165  max(FAI,0)×100
+  //   BOD_WQI_x_FAI                       norm(WQI)×FAI_pos×100
 
-  // Composites scaled to [0, 100] for readability
-  var DO_clarity    = NDWI_n.multiply(DO_est_n).multiply(TDS_est_n)
-                       .multiply(100).rename('DO_clarity_composite');
+  var TI_n      = TI.subtract(0.20).divide(1.80).clamp(0, 1);
+  var NDCI_pos_n= NDCI_pos.divide(0.50).clamp(0, 1);
+  var SWIR_n    = SWIR_norm.clamp(0, 1);
+  var NDWI_n    = NDWI.add(1).divide(2).clamp(0, 1);
+  var DO_est_n  = DO_est.divide(8.0).clamp(0, 1);
+  var WQI_n     = WQI.divide(100).clamp(0, 1);
+  var FAI_pos   = FAI.max(ee.Image(0));
 
-  var DO_swir_ndwi  = SWIR_n.multiply(NDWI_n)
-                       .multiply(100).rename('DO_swir_ndwi_product');
+  // DO features
+  var do_ndwi_x_do  = NDWI_n.multiply(DO_est_n).multiply(100)
+                        .rename('DO_NDWI_x_DO_est');
+  var do_clarity    = NDWI.divide(TI.add(0.01)).clamp(0, 20)
+                        .rename('DO_clarity_ratio');
+  var do_ndwi_sq    = NDWI.pow(2)
+                        .rename('DO_NDWI_squared');
+  var do_swir_ndwi  = SWIR_n.multiply(NDWI_n).multiply(100)
+                        .rename('DO_SWIR_x_NDWI');
+  var do_ti_swir    = TI.multiply(SWIR_norm)
+                        .rename('DO_TI_x_SWIR');
 
-  var BOD_algal     = NDCI_pos_n.multiply(FAI_abs_n)
-                       .multiply(100).rename('BOD_algal_composite');
-
-  var BOD_turb_alg  = TI_norm.multiply(NDCI_pos_n)
-                       .multiply(100).rename('BOD_turbid_algal');
-
-  var BOD_COD_sum   = BOD_est_n.add(COD_est_n)
-                       .multiply(50).rename('BOD_COD_sum');
-
-  var Stress_Idx    = WQI_n.multiply(BOD_est_n)
-                       .multiply(ee.Image(1).subtract(DO_est_n))
-                       .multiply(100).rename('Stress_Index');
+  // BOD/COD features
+  var bod_fai_ndci_sq  = FAI_pos.multiply(NDCI_pos.pow(2)).multiply(1000)
+                           .rename('BOD_FAI_x_NDCI_sq');
+  var bod_fai_ndci     = FAI_pos.multiply(NDCI_pos).multiply(100)
+                           .rename('BOD_FAI_x_NDCI');
+  var bod_algal_stress = NDCI_pos.divide(NDWI.max(ee.Image(0.01))).clamp(0, 50)
+                           .rename('BOD_algal_stress');
+  var bod_ndci_sq      = NDCI_pos.pow(2).multiply(100)
+                           .rename('BOD_NDCI_squared');
+  var bod_fai_pos      = FAI_pos.multiply(100)
+                           .rename('BOD_FAI_positive');
+  var bod_wqi_x_fai    = WQI_n.multiply(FAI_pos).multiply(100)
+                           .rename('BOD_WQI_x_FAI');
 
   return img.addBands([
     TI, NDCI, NDCI_pos, SWIR_norm, FAI, NDWI,
     DO_est, BOD_est, COD_est, TDS_est, TSS_est, WQI,
-    DO_clarity, DO_swir_ndwi, BOD_algal, BOD_turb_alg, BOD_COD_sum, Stress_Idx
+    do_ndwi_x_do, do_clarity, do_ndwi_sq, do_swir_ndwi, do_ti_swir,
+    bod_fai_ndci_sq, bod_fai_ndci, bod_algal_stress,
+    bod_ndci_sq, bod_fai_pos, bod_wqi_x_fai
   ]);
 }
 
 
-// ── Bands to reduce over lakes (proxies + composites, NO raw band means) ─────
 var PROXY_BANDS = [
-  // spectral indices (positive-correlation proxies)
+  // base spectral indices
   'TurbidityIndex','NDCI','NDCI_pos','SWIR_TDS_norm','FAI','NDWI',
   // calibrated WQ estimates
-  'DO_est_mgL','BOD_est_mgL','COD_est_mgL','TDS_est_mgL','TSS_est_mgL',
-  'WQI_proxy',
-  // derived composites (combination of positive-corr proxies)
-  'DO_clarity_composite','DO_swir_ndwi_product',
-  'BOD_algal_composite','BOD_turbid_algal','BOD_COD_sum','Stress_Index'
+  'DO_est_mgL','BOD_est_mgL','COD_est_mgL','TDS_est_mgL','TSS_est_mgL','WQI_proxy',
+  // DO named composites
+  'DO_NDWI_x_DO_est','DO_clarity_ratio','DO_NDWI_squared',
+  'DO_SWIR_x_NDWI','DO_TI_x_SWIR',
+  // BOD/COD named composites
+  'BOD_FAI_x_NDCI_sq','BOD_FAI_x_NDCI','BOD_algal_stress',
+  'BOD_NDCI_squared','BOD_FAI_positive','BOD_WQI_x_FAI'
 ];
 
 // ── 6. PROCESS ALL MONTHS ─────────────────────────────────
